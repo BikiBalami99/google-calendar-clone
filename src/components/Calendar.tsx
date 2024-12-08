@@ -10,10 +10,11 @@ import {
   endOfDay,
   isToday,
   subMonths,
-  addMonths, 
+  addMonths,
 } from "date-fns";
 import { formatDate } from "../utils/formatData";
-import { cc } from "../utils/ConCatClasses";
+import { cc } from "../utils/conCatClasses";
+import { useEvents } from "../context/useEvent";
 
 export default function Calendar() {
   const [selectedMonth, setSelectedMonth] = useState(new Date());
@@ -78,6 +79,8 @@ type CalendarDayProps = {
 };
 
 function CalendarDay({ day, showWeekName, selectedMonth }: CalendarDayProps) {
+  const { addEvent } = useEvents();
+
   return (
     <div
       className={cc(
@@ -115,3 +118,4 @@ function CalendarDay({ day, showWeekName, selectedMonth }: CalendarDayProps) {
     </div>
   );
 }
+
