@@ -17,9 +17,10 @@ import {
 import { formatDate } from "../utils/formatData";
 import { cc } from "../utils/conCatClasses";
 import { EVENT_COLORS, useEvents } from "../context/useEvent";
-import Modal, { ModalProps } from "./Modal";
+import { Modal, ModalProps } from "./Modal";
 import { UnionOmit } from "../utils/types";
 import { Event } from "../context/Events";
+import { OverflowContainer } from "./OverflowContainer";
 
 export default function Calendar() {
   const [selectedMonth, setSelectedMonth] = useState(new Date());
@@ -27,10 +28,7 @@ export default function Calendar() {
   const calendarDays = useMemo(() => {
     const firstWeekStart = startOfWeek(startOfMonth(selectedMonth));
     const lastWeekEnd = endOfWeek(endOfMonth(selectedMonth));
-    return eachDayOfInterval({
-      start: firstWeekStart,
-      end: lastWeekEnd,
-    });
+    return eachDayOfInterval({ start: firstWeekStart, end: lastWeekEnd });
   }, [selectedMonth]);
 
   const { events } = useEvents();
@@ -45,7 +43,7 @@ export default function Calendar() {
           <button
             className="month-change-btn"
             onClick={() => {
-              setSelectedMonth((prev) => subMonths(prev, 1));
+              setSelectedMonth((m) => subMonths(m, 1));
             }}
           >
             &lt;
@@ -53,7 +51,7 @@ export default function Calendar() {
           <button
             className="month-change-btn"
             onClick={() => {
-              setSelectedMonth((prev) => addMonths(prev, 1));
+              setSelectedMonth((m) => addMonths(m, 1));
             }}
           >
             &gt;
@@ -64,17 +62,15 @@ export default function Calendar() {
         </span>
       </div>
       <div className="days">
-        {calendarDays.map((day, index) => {
-          return (
-            <CalendarDay
-              day={day}
-              selectedMonth={selectedMonth}
-              showWeekName={index < 7}
-              key={day.getTime()}
-              events={events.filter((event) => isSameDay(day, event.date))}
-            />
-          );
-        })}
+        {calendarDays.map((day, index) => (
+          <CalendarDay
+            key={day.getTime()}
+            day={day}
+            events={events.filter((event) => isSameDay(day, event.date))}
+            showWeekName={index < 7}
+            selectedMonth={selectedMonth}
+          />
+        ))}
       </div>
     </div>
   );
@@ -94,6 +90,8 @@ function CalendarDay({
   events,
 }: CalendarDayProps) {
   const [isNewEventModalOpen, setIsNewEventModalOpen] = useState(false);
+  const [isViewMoreEventModalOpen, setIsViewMoreEventModalOpen] =
+    useState(false);
   const { addEvent } = useEvents();
 
   const sortedEvents = useMemo(() => {
@@ -136,13 +134,28 @@ function CalendarDay({
           +
         </button>
       </div>
-
       {sortedEvents.length > 0 && (
-        <div className="events">
-          {sortedEvents.map((event) => (
-            <CalendarEvent key={event.id} event={event} />
-          ))}
-        </div>
+        <OverflowContainer
+          className="events"
+          items={sortedEvents}
+          getKey={(event) => event.id}
+          renderItem={(event) => <CalendarEvent event={event} />}
+          renderOverflow={(amount) => (
+            <>
+              <button
+                onClick={() => setIsViewMoreEventModalOpen(true)}
+                className="events-view-more-btn"
+              >
+                +{amount} More
+              </button>
+              <ViewMoreCalendarEventsModal
+                events={sortedEvents}
+                isOpen={isViewMoreEventModalOpen}
+                onClose={() => setIsViewMoreEventModalOpen(false)}
+              />
+            </>
+          )}
+        />
       )}
 
       <EventFormModal
@@ -152,6 +165,33 @@ function CalendarDay({
         onSubmit={addEvent}
       />
     </div>
+  );
+}
+
+type ViewMoreCalendarEventsModalProps = {
+  events: Event[];
+} & Omit<ModalProps, "children">;
+
+function ViewMoreCalendarEventsModal({
+  events,
+  ...modalProps
+}: ViewMoreCalendarEventsModalProps) {
+  if (events.length === 0) return null;
+
+  return (
+    <Modal {...modalProps}>
+      <div className="modal-title">
+        <small>{formatDate(events[0].date, { dateStyle: "short" })}</small>
+        <button className="close-btn" onClick={modalProps.onClose}>
+          &times;
+        </button>
+      </div>
+      <div className="events">
+        {events.map((event) => (
+          <CalendarEvent event={event} key={event.id} />
+        ))}
+      </div>
+    </Modal>
   );
 }
 
@@ -183,7 +223,7 @@ function CalendarEvent({ event }: { event: Event }) {
         event={event}
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        onSubmit={(e) => updateEvent(event.id, event)}
+        onSubmit={(e) => updateEvent(event.id, e)}
         onDelete={() => deleteEvent(event.id)}
       />
     </>
@@ -205,6 +245,8 @@ function EventFormModal({
   date,
   ...modalProps
 }: EventFormModalProps) {
+  const isNew = event == null;
+  const formId = useId();
   const [selectedColor, setSelectedColor] = useState(
     event?.color || EVENT_COLORS[0]
   );
@@ -212,12 +254,8 @@ function EventFormModal({
     event?.allDay || false
   );
   const [startTime, setStartTime] = useState(event?.startTime || "");
-
   const endTimeRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
-
-  const isNew = event == null;
-  const formId = useId();
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -225,9 +263,7 @@ function EventFormModal({
     const name = nameRef.current?.value;
     const endTime = endTimeRef.current?.value;
 
-    if (name == null || name === "") {
-      return;
-    }
+    if (name == null || name === "") return;
 
     const commonProps = {
       name,
@@ -257,6 +293,7 @@ function EventFormModal({
         endTime,
       };
     }
+
     modalProps.onClose();
     onSubmit(newEvent);
   }
@@ -281,7 +318,6 @@ function EventFormModal({
             id={`${formId}-name`}
           />
         </div>
-
         <div className="form-group checkbox">
           <input
             checked={isAllDayChecked}
@@ -291,7 +327,6 @@ function EventFormModal({
           />
           <label htmlFor={`${formId}-all-day`}>All Day?</label>
         </div>
-
         <div className="row">
           <div className="form-group">
             <label htmlFor={`${formId}-start-time`}>Start Time</label>
@@ -304,7 +339,6 @@ function EventFormModal({
               id={`${formId}-start-time`}
             />
           </div>
-
           <div className="form-group">
             <label htmlFor={`${formId}-end-time`}>End Time</label>
             <input
@@ -318,7 +352,6 @@ function EventFormModal({
             />
           </div>
         </div>
-
         <div className="form-group">
           <label>Color</label>
           <div className="row left">
